@@ -732,7 +732,7 @@ SUBROUTINE DCAPECALC2D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
             ethmax = -1.D0
             eth_temp = -1.D0
             DO k = 1, mkzh
-                IF (ght_new(k,i,j)-ter(i,j) .LT. 3000.D0) THEN
+                IF (ght_new(k,i,j)-ter(i,j) .LT. 6000.D0) THEN
                     tlcl = TLCLC1 / (LOG(tmk_new(k,i,j)**TLCLC2/&
                            (MAX(qvp_new(k,i,j), 1.d-15)*prs_new(k,i,j)/(EPS+MAX(qvp_new(k,i,j), 1.d-15))))-TLCLC3)+&
                            TLCLC4
