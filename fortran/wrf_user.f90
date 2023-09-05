@@ -164,7 +164,7 @@ SUBROUTINE DINTERP3DZ_2DLEV(data3d, out2d, zdata, levs2d, nx, ny, nz, missingval
             desiredloc = levs2d(i,j)
 
             DO WHILE ((.NOT. dointerp) .AND. (kp >= 2))
-                IF (((zdata(i,j,kp-im) < desiredloc) .AND. (zdata(i,j,kp-ip) > desiredloc))) THEN
+                IF (((zdata(i,j,kp-im) < desiredloc) .AND. (zdata(i,j,kp-ip) >= desiredloc))) THEN
                     w2 = (desiredloc - zdata(i,j,kp-im))/(zdata(i,j,kp-ip) - zdata(i,j,kp-im))
                     w1 = 1.D0 - w2
                     out2d(i,j) = w1*data3d(i,j,kp-im) + w2*data3d(i,j,kp-ip)
