@@ -51,7 +51,7 @@ ext1 = numpy.distutils.core.Extension(
              "fortran/wrf_vinterp.f90",
              "fortran/wrf_wind.f90",
              "fortran/omp.f90"],
-    extra_f90_compile_args = ["-fopenmp"],
+    extra_f90_compile_args = ["-fopenmp", "-static"],
     extra_link_args = ["-lgomp"]
     )
 
