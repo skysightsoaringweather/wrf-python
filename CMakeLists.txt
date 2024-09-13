@@ -48,11 +48,6 @@ set_source_files_properties(fortran/ompgen.F90 PROPERTIES Fortran_PREPROCESS ON)
 # I think the main thing to be changed is -E -cpp
 # Intel is -fpp -save-temps or /fpp on Windows
 # or call fpp instead of the fortran compiler to get it to stop after preprocessing
-  add_custom_command(
-    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/fortran/omp.f90"
-    DEPENDS "${CMAKE_SOURCE_DIR}/fortran/ompgen.F90"
-    COMMAND ${CMAKE_Fortran_COMPILER} -E fortran/ompgen.F90 -o fortran/omp.f90 -cpp
-    )
 
 # Prepping the module
 set(f2py_module_name "_wrffortran")
@@ -73,7 +68,6 @@ set(fortran_src_files
     "${CMAKE_SOURCE_DIR}/fortran/wrf_pw.f90"
     "${CMAKE_SOURCE_DIR}/fortran/wrf_vinterp.f90"
     "${CMAKE_SOURCE_DIR}/fortran/wrf_wind.f90"
-    "${CMAKE_CURRENT_BINARY_DIR}/fortran/omp.f90")
 set(python_src_files
     "${CMAKE_SOURCE_DIR}/src/wrf/__init__.py"
     "${CMAKE_SOURCE_DIR}/src/wrf/api.py"
