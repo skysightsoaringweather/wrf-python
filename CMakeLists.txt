@@ -67,7 +67,7 @@ set(fortran_src_files
     "${CMAKE_SOURCE_DIR}/fortran/wrf_rip_phys_routines.f90"
     "${CMAKE_SOURCE_DIR}/fortran/wrf_pw.f90"
     "${CMAKE_SOURCE_DIR}/fortran/wrf_vinterp.f90"
-    "${CMAKE_SOURCE_DIR}/fortran/wrf_wind.f90"
+    "${CMAKE_SOURCE_DIR}/fortran/wrf_wind.f90")
 set(python_src_files
     "${CMAKE_SOURCE_DIR}/src/wrf/__init__.py"
     "${CMAKE_SOURCE_DIR}/src/wrf/api.py"
