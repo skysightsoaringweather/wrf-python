@@ -48,35 +48,11 @@ set_source_files_properties(fortran/ompgen.F90 PROPERTIES Fortran_PREPROCESS ON)
 # I think the main thing to be changed is -E -cpp
 # Intel is -fpp -save-temps or /fpp on Windows
 # or call fpp instead of the fortran compiler to get it to stop after preprocessing
-if (${OpenMP_Fortran_FOUND})
-  # This would probably be cleaner if I shoved it in the subdirectory
-  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/fortran")
-  add_executable(sizes "${CMAKE_SOURCE_DIR}/fortran/build_help/omp_sizes.f90")
-  target_link_libraries(sizes PUBLIC OpenMP::OpenMP_Fortran)
-  add_custom_command(
-    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/fortran/ompgen.F90"
-    DEPENDS "${CMAKE_SOURCE_DIR}/fortran/ompgen.F90.template"
-      ${CMAKE_SOURCE_DIR}/fortran/build_help/sub_sizes.py
-      sizes
-    COMMAND
-      ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/fortran/build_help/sub_sizes.py
-        ${CMAKE_SOURCE_DIR}/fortran/ompgen.F90.template
-	${CMAKE_CURRENT_BINARY_DIR}/fortran/ompgen.F90
-    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    )
-  add_custom_command(
-    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/fortran/omp.f90"
-    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/fortran/ompgen.F90"
-    COMMAND ${CMAKE_Fortran_COMPILER} -E "${CMAKE_CURRENT_BINARY_DIR}/fortran/ompgen.F90"
-      -o "${CMAKE_CURRENT_BINARY_DIR}/fortran/omp.f90" ${OpenMP_Fortran_FLAGS} -cpp
-    )
-else()
   add_custom_command(
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/fortran/omp.f90"
     DEPENDS "${CMAKE_SOURCE_DIR}/fortran/ompgen.F90"
     COMMAND ${CMAKE_Fortran_COMPILER} -E fortran/ompgen.F90 -o fortran/omp.f90 -cpp
     )
-endif()
 
 # Prepping the module
 set(f2py_module_name "_wrffortran")
@@ -175,9 +151,6 @@ set_target_properties(${f2py_module_name} PROPERTIES PREFIX "")
 
 # https://scikit-build-core.readthedocs.io/en/latest/getting_started.html
 target_link_libraries(${f2py_module_name} PRIVATE Python::NumPy)
-if (${OpenMP_Fortran_FOUND})
-  target_link_libraries(${f2py_module_name} PUBLIC OpenMP::OpenMP_Fortran)
-endif()
 
 # Linker fixes
 if (UNIX)
