@@ -44,8 +44,12 @@ classifiers = [
 license = { text = "Apache-2.0" }
 dynamic = [ "version" ]
 dependencies = [
+<<<<<<< HEAD
     "basemap",
     "numpy >=1.11, !=1.24.3",
+=======
+    "numpy >=1.11, !=1.24.3, <2.0",
+>>>>>>> 9f63064 (remove basemap dep)
     "setuptools>=61",
     "wrapt",
     "xarray"
