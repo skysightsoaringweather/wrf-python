@@ -12,6 +12,6 @@ cd ..
 
 python setup.py clean --all
 export LDFLAGS=" -fopenmp "
-python setup.py config_fc --f90flags="-mtune=generic -fopenmp" build_ext --libraries="gomp" build
+python setup.py config_fc --f90flags="-O3 -mavx2 -fopenmp" build_ext --libraries="gomp" build
 pip install .
 

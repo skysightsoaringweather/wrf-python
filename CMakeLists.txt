@@ -42,6 +42,29 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+# Set optimization flags based on compiler
+if(CMAKE_C_COMPILER_ID MATCHES "GNU")
+  set(C_OPT_FLAGS "-O3 -mavx2")
+  set(FORTRAN_OPT_FLAGS "-O3 -mavx2")
+elseif(CMAKE_C_COMPILER_ID MATCHES "Intel")
+  set(C_OPT_FLAGS "-O3 -mavx2")
+  set(FORTRAN_OPT_FLAGS "-O3 -mavx2")
+elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
+  set(C_OPT_FLAGS "-O3 -mavx2")
+  set(FORTRAN_OPT_FLAGS "-O3 -mavx2")
+else()
+  # Default optimization flags with AVX2
+  set(C_OPT_FLAGS "-O3 -mavx2")
+  set(FORTRAN_OPT_FLAGS "-O3 -mavx2")
+endif()
+
+# Apply optimization flags
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_OPT_FLAGS}")
+set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${FORTRAN_OPT_FLAGS}")
+
+message(STATUS "C optimization flags: ${C_OPT_FLAGS}")
+message(STATUS "Fortran optimization flags: ${FORTRAN_OPT_FLAGS}")
+
 find_package(OpenMP COMPONENTS Fortran)
 set_source_files_properties(fortran/ompgen.F90 PROPERTIES Fortran_PREPROCESS ON)
 # TODO: Figure out the conditionals for running the C Preprocessor on Fortran files

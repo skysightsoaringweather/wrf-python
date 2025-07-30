@@ -7,5 +7,5 @@ $FC -E ompgen.F90 -cpp -o omp.f90
 cd ..
 
 python setup.py clean --all
-python setup.py config_fc --f90flags="-mtune=generic" build_ext build
+python setup.py config_fc --f90flags="-O3 -mavx2" build_ext build
 pip install .

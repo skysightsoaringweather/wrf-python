@@ -12,11 +12,7 @@ maintainers = [
 ]
 description = "Diagnostic and interpolation routines for WRF-ARW data."
 readme = "README.md"
-<<<<<<< HEAD
-requires-python = ">=3.9, <3.13"
-=======
 requires-python = ">=3.7, <3.14"
->>>>>>> d168ba2 (version bump)
 keywords = [
     "python", "wrf-python", "wrf", "forecast", "model",
     "weather research and forecasting", "interpolation",
@@ -44,12 +40,7 @@ classifiers = [
 license = { text = "Apache-2.0" }
 dynamic = [ "version" ]
 dependencies = [
-<<<<<<< HEAD
-    "basemap",
     "numpy >=1.11, !=1.24.3",
-=======
-    "numpy >=1.11, !=1.24.3, <2.0",
->>>>>>> 9f63064 (remove basemap dep)
     "setuptools>=61",
     "wrapt",
     "xarray"

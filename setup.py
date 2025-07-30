@@ -50,7 +50,8 @@ ext1 = numpy.distutils.core.Extension(
              "fortran/wrf_pw.f90",
              "fortran/wrf_vinterp.f90",
              "fortran/wrf_wind.f90",
-             "fortran/omp.f90"]
+             "fortran/omp.f90"],
+    extra_compile_args=["-O3", "-mavx2"]
     )
 
 #Note: __version__ will be set in the version.py script loaded below
