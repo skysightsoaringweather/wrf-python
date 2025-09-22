@@ -7,6 +7,18 @@ from .metadecorators import copy_and_set_metadata
 from .util import extract_vars
 
 
+def _cache_get(cache, name, key):
+    if cache is None:
+        return None
+    return cache.get((name, key))
+
+
+def _cache_set(cache, name, key, value):
+    if cache is not None:
+        cache[(name, key)] = value
+    return value
+
+
 @copy_and_set_metadata(copy_varname="T", name="theta",
                        description="potential temperature")
 @convert_units("temp", "k")
@@ -227,9 +239,16 @@ def get_eth(wrfin, timeidx=0, method="cat", squeeze=True,
     pb = ncvars["PB"]
     qv = ncvars["QVAPOR"]
 
-    full_t = t + Constants.T_BASE
-    full_p = p + pb
-    tk = _tk(full_p, full_t)
+    cache_key = _key
+
+    full_p = _cache_get(cache, "_full_pressure", cache_key)
+    if full_p is None:
+        full_p = _cache_set(cache, "_full_pressure", cache_key, p + pb)
+
+    tk = _cache_get(cache, "_tk_full", cache_key)
+    if tk is None:
+        full_t = t + Constants.T_BASE
+        tk = _cache_set(cache, "_tk_full", cache_key, _tk(full_p, full_t))
 
     eth = _eth(qv, tk, full_p)
 
@@ -308,9 +327,16 @@ def get_tv(wrfin, timeidx=0, method="cat", squeeze=True,
     pb = ncvars["PB"]
     qv = ncvars["QVAPOR"]
 
-    full_t = t + Constants.T_BASE
-    full_p = p + pb
-    tk = _tk(full_p, full_t)
+    cache_key = _key
+
+    full_p = _cache_get(cache, "_full_pressure", cache_key)
+    if full_p is None:
+        full_p = _cache_set(cache, "_full_pressure", cache_key, p + pb)
+
+    tk = _cache_get(cache, "_tk_full", cache_key)
+    if tk is None:
+        full_t = t + Constants.T_BASE
+        tk = _cache_set(cache, "_tk_full", cache_key, _tk(full_p, full_t))
 
     tv = _tv(tk, qv)
 

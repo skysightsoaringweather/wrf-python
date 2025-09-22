@@ -867,7 +867,7 @@ def cape_2d(pres_hpa, tkel, qv, height, terrain, psfc_hpa, ter_follow,
     resdim = (4,) + left_dims + right_dims
 
     # Make a new output array for the result
-    result = np.zeros(resdim, cape_cin.dtype)
+    result = np.empty(resdim, cape_cin.dtype)
 
     # Cape 2D output is not flipped in the vertical, so index from the
     # end

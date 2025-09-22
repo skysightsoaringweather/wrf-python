@@ -6,6 +6,18 @@ from .util import extract_vars
 from .metadecorators import copy_and_set_metadata
 
 
+def _cache_get(cache, name, key):
+    if cache is None:
+        return None
+    return cache.get((name, key))
+
+
+def _cache_set(cache, name, key, value):
+    if cache is not None:
+        cache[(name, key)] = value
+    return value
+
+
 @copy_and_set_metadata(copy_varname="T", name="rh",
                        description="relative humidity",
                        units="%")
@@ -73,10 +85,18 @@ def get_rh(wrfin, timeidx=0, method="cat", squeeze=True, cache=None,
     # break with every release
     qvapor = ncvars["QVAPOR"].copy()
 
-    full_t = t + Constants.T_BASE
-    full_p = p + pb
+    cache_key = _key
+
+    full_p = _cache_get(cache, "_full_pressure", cache_key)
+    if full_p is None:
+        full_p = _cache_set(cache, "_full_pressure", cache_key, p + pb)
+
+    tk = _cache_get(cache, "_tk_full", cache_key)
+    if tk is None:
+        full_t = t + Constants.T_BASE
+        tk = _cache_set(cache, "_tk_full", cache_key, _tk(full_p, full_t))
+
     qvapor[qvapor < 0] = 0
-    tk = _tk(full_p, full_t)
     rh = _rh(qvapor, full_p, tk)
 
     return rh

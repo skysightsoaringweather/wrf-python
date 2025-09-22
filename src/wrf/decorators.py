@@ -272,6 +272,25 @@ def cast_type(ref_idx=0, arg_idxs=None, karg_names=None,
         same :class:`numpy.dtype` as the reference variable.
 
     """
+    alg_np_dtype = np.dtype(alg_dtype)
+
+    def _cast_if_needed(val):
+        dtype = getattr(val, "dtype", None)
+
+        if dtype is not None:
+            if dtype == alg_np_dtype:
+                return val
+
+            astype = getattr(val, "astype", None)
+            if astype is not None:
+                return astype(alg_np_dtype, copy=False)
+
+        astype = getattr(val, "astype", None)
+        if astype is not None:
+            return astype(alg_np_dtype)
+
+        return np.asarray(val, dtype=alg_np_dtype)
+
     @wrapt.decorator
     def func_wrapper(wrapped, instance, args, kwargs):
         _arg_idxs = arg_idxs if arg_idxs is not None else ()
@@ -287,14 +306,12 @@ def cast_type(ref_idx=0, arg_idxs=None, karg_names=None,
             if _outview is not None:
                 has_outview = True
 
-        orig_type = args[ref_idx].dtype
+        orig_type = np.dtype(args[ref_idx].dtype)
 
-        new_args = [arg.astype(alg_dtype)
-                    if i in _arg_idxs else arg
+        new_args = [_cast_if_needed(arg) if i in _arg_idxs else arg
                     for i, arg in enumerate(args)]
 
-        new_kargs = {key: (val.astype(alg_dtype)
-                           if key in _karg_names else val)
+        new_kargs = {key: (_cast_if_needed(val) if key in _karg_names else val)
                      for key, val in viewitems(kwargs)}
 
         result = wrapped(*new_args, **new_kargs)

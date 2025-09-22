@@ -7,6 +7,18 @@ from .util import extract_vars
 from .metadecorators import copy_and_set_metadata
 
 
+def _cache_get(cache, name, key):
+    if cache is None:
+        return None
+    return cache.get((name, key))
+
+
+def _cache_set(cache, name, key, value):
+    if cache is not None:
+        cache[(name, key)] = value
+    return value
+
+
 @copy_and_set_metadata(copy_varname="T", name="omega",
                        description="omega",
                        units="Pa s-1")
@@ -73,10 +85,21 @@ def get_omega(wrfin, timeidx=0, method="cat", squeeze=True, cache=None,
     pb = ncvars["PB"]
     qv = ncvars["QVAPOR"]
 
-    wa = destagger(w, -3)
-    full_t = t + Constants.T_BASE
-    full_p = p + pb
-    tk = _tk(full_p, full_t)
+    cache_key = _key
+
+    wa = _cache_get(cache, "_wa_destaggered", cache_key)
+    if wa is None:
+        wa = _cache_set(cache, "_wa_destaggered", cache_key,
+                        destagger(w, -3))
+
+    full_p = _cache_get(cache, "_full_pressure", cache_key)
+    if full_p is None:
+        full_p = _cache_set(cache, "_full_pressure", cache_key, p + pb)
+
+    tk = _cache_get(cache, "_tk_full", cache_key)
+    if tk is None:
+        full_t = t + Constants.T_BASE
+        tk = _cache_set(cache, "_tk_full", cache_key, _tk(full_p, full_t))
 
     omega = _omega(qv, tk, wa, full_p)
 

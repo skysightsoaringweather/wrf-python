@@ -13,6 +13,21 @@ except (ImportError, ModuleNotFoundError):
     import subprocess
     subprocess.call([sys.executable, '-m', 'pip', 'install', 'numpy'])
 
+if sys.platform.startswith("win"):
+    openmp_compile_args = ["/openmp"]
+    openmp_link_args = ["/openmp"]
+elif sys.platform == "darwin":
+    openmp_compile_args = ["-fopenmp"]
+    openmp_link_args = ["-fopenmp"]
+else:
+    openmp_compile_args = ["-fopenmp"]
+    openmp_link_args = ["-fopenmp"]
+
+
+if socket.gethostname().startswith("cheyenne"):
+    openmp_compile_args = ["-qopenmp"]
+    openmp_link_args = ["-qopenmp"]
+
 if not socket.gethostname().startswith("cheyenne"):
     import numpy.distutils.core
 else:
@@ -50,8 +65,9 @@ ext1 = numpy.distutils.core.Extension(
              "fortran/wrf_pw.f90",
              "fortran/wrf_vinterp.f90",
              "fortran/wrf_wind.f90",
-             "fortran/omp.f90"],
-    extra_compile_args=["-O3", "-mavx2"]
+             "fortran/ompgen.F90"],
+    extra_compile_args=["-O3", "-mavx2"] + openmp_compile_args,
+    extra_link_args=openmp_link_args,
     )
 
 #Note: __version__ will be set in the version.py script loaded below
