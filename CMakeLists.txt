@@ -42,21 +42,19 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-# Set optimization flags based on compiler
-if(CMAKE_C_COMPILER_ID MATCHES "GNU")
-  set(C_OPT_FLAGS "-O3 -mavx2")
-  set(FORTRAN_OPT_FLAGS "-O3 -mavx2")
-elseif(CMAKE_C_COMPILER_ID MATCHES "Intel")
-  set(C_OPT_FLAGS "-O3 -mavx2")
-  set(FORTRAN_OPT_FLAGS "-O3 -mavx2")
-elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
-  set(C_OPT_FLAGS "-O3 -mavx2")
-  set(FORTRAN_OPT_FLAGS "-O3 -mavx2")
+# Choose vectorization flags that make sense for the host CPU
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64)$")
+  set(VECTOR_FLAG "-mavx2")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+  # AVX2 is x86-only; use a portable tuning flag instead
+  set(VECTOR_FLAG "-mcpu=native")
 else()
-  # Default optimization flags with AVX2
-  set(C_OPT_FLAGS "-O3 -mavx2")
-  set(FORTRAN_OPT_FLAGS "-O3 -mavx2")
+  set(VECTOR_FLAG "")
 endif()
+
+# Set optimization flags based on compiler
+set(C_OPT_FLAGS "-O3 ${VECTOR_FLAG}")
+set(FORTRAN_OPT_FLAGS "-O3 ${VECTOR_FLAG}")
 
 # Apply optimization flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_OPT_FLAGS}")
@@ -67,13 +65,14 @@ message(STATUS "Fortran optimization flags: ${FORTRAN_OPT_FLAGS}")
 
 find_package(OpenMP COMPONENTS Fortran)
 set_source_files_properties(fortran/ompgen.F90 PROPERTIES Fortran_PREPROCESS ON)
+# Always ensure the build directory exists for generated Fortran sources
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/fortran")
 # TODO: Figure out the conditionals for running the C Preprocessor on Fortran files
 # I think the main thing to be changed is -E -cpp
 # Intel is -fpp -save-temps or /fpp on Windows
 # or call fpp instead of the fortran compiler to get it to stop after preprocessing
 if (${OpenMP_Fortran_FOUND})
   # This would probably be cleaner if I shoved it in the subdirectory
-  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/fortran")
   add_executable(sizes "${CMAKE_SOURCE_DIR}/fortran/build_help/omp_sizes.f90")
   target_link_libraries(sizes PUBLIC OpenMP::OpenMP_Fortran)
   add_custom_command(
@@ -97,7 +96,8 @@ else()
   add_custom_command(
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/fortran/omp.f90"
     DEPENDS "${CMAKE_SOURCE_DIR}/fortran/ompgen.F90"
-    COMMAND ${CMAKE_Fortran_COMPILER} -E fortran/ompgen.F90 -o fortran/omp.f90 -cpp
+    COMMAND ${CMAKE_Fortran_COMPILER} -E "${CMAKE_SOURCE_DIR}/fortran/ompgen.F90"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/fortran/omp.f90" -cpp
     )
 endif()
 
