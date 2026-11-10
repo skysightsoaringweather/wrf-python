@@ -272,7 +272,6 @@ END SUBROUTINE DPFCALC
 
 ! NCLFORTSTART
 SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
-            prsf, prs_new, tmk_new, qvp_new, ght_new,&
             cmsg,mix,mjy,mkzh,ter_follow,&
             psafile, errstat, errmsg)
     USE wrf_constants, ONLY : CELKEL, G, EZERO, ESLCON1, ESLCON2, &
@@ -295,13 +294,6 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
     REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(OUT) :: cape
     REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(OUT) :: cin
 
-    REAL(KIND=8), DIMENSION(mkzh,mix,mjy), INTENT(INOUT) :: prsf
-    REAL(KIND=8), DIMENSION(mkzh,mix,mjy), INTENT(INOUT)  :: prs_new
-    REAL(KIND=8), DIMENSION(mkzh,mix,mjy), INTENT(INOUT)  :: tmk_new
-    REAL(KIND=8), DIMENSION(mkzh,mix,mjy), INTENT(INOUT)  :: qvp_new
-    REAL(KIND=8), DIMENSION(mkzh,mix,mjy), INTENT(INOUT)  :: ght_new
-
-
     REAL(KIND=8), INTENT(IN) :: cmsg
     CHARACTER(LEN=*), INTENT(IN) :: psafile
     INTEGER, INTENT(INOUT) :: errstat
@@ -310,17 +302,22 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
 ! NCLFORTEND
 
     ! local variables
+    INTEGER :: jt, lo, hi, mid
+    INTEGER, DIMENSION(mkzh) :: ip_col
+    REAL(KIND=8), DIMENSION(mkzh) :: fracip_col, tvenv_col
+    REAL(KIND=8) :: fracjt, dry_lapse, TONPSADIABAT_CACHED
     INTEGER :: i, j, k, ilcl, kel, kk, klcl, klev, klfc, kmax, kpar
     REAL(KIND=8) :: tlcl, zlcl
     REAL(KIND=8) :: ethpari, qvppari, tmkpari
     REAL(KIND=8) :: facden, qvplift, tmklift, tvenv, tvlift, ghtlift
-    REAL(KIND=8) :: eslift, tmkenv, qvpenv, tonpsadiabat
+    REAL(KIND=8) :: eslift, tmkenv, qvpenv
     REAL(KIND=8) :: benamin, dz
     ! Set a safety factor of 2*mkzh + 1 instead of previously chosen
     ! 150 levels
     REAL(KIND=8), DIMENSION(2*mkzh + 1) :: buoy, zrel, benaccum
     REAL(KIND=8), DIMENSION(150) :: psadithte, psadiprs
     REAL(KIND=8), DIMENSION(150,150) :: psaditmk
+    REAL(KIND=8), DIMENSION(mkzh) :: prs_col, tmk_col, qvp_col, ght_col
     LOGICAL :: elfound
 
 
@@ -356,24 +353,6 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
     !           kg/kg (should range from 0.000 to 0.025)
     !
 
-    !  calculated the pressure at full sigma levels (a set of pressure
-    !  levels that bound the layers represented by the vertical grid points)
-
-    !$OMP PARALLEL DO COLLAPSE(3) SCHEDULE(runtime)
-    DO j = 1,mjy
-        DO i = 1,mix
-            DO k = 1,mkzh
-                prs_new(k,i,j) = prs(i,j,k)
-                tmk_new(k,i,j) = tmk(i,j,k)
-                qvp_new(k,i,j) = qvp(i,j,k)
-                ght_new(k,i,j) = ght(i,j,k)
-            END DO
-        END DO
-    END DO
-    !$OMP END PARALLEL DO
-    
-    CALL DPFCALC(prs_new, sfp, prsf, mix, mjy, mkzh, ter_follow)
-
     !  before looping, set lookup table for getting temperature on
     !  a pseudoadiabat.
 
@@ -387,10 +366,35 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
     !$OMP zlcl, kk, ilcl, klcl, tmklift, tvenv, tvlift, ghtlift, &
     !$OMP facden, tmkenv, qvpenv, eslift, qvplift, buoy, benamin, &
     !$OMP benaccum, zrel, kmax, dz, elfound, &
-    !$OMP kel, klfc, &
-    !$OMP i, j, k, kpar) SCHEDULE(runtime)
+    !$OMP kel, klfc, jt, lo, hi, mid, ip_col, fracip_col, tvenv_col, fracjt, dry_lapse, &
+    !$OMP prs_col, tmk_col, qvp_col, ght_col, i, j, k, kpar) SCHEDULE(runtime)
     DO j = 1,mjy
         DO i = 1,mix
+            ! Keep vertical locality without transposing four complete volumes.
+            DO k = 1,mkzh
+                prs_col(k) = prs(i,j,k)
+                tmk_col(k) = tmk(i,j,k)
+                qvp_col(k) = qvp(i,j,k)
+                ght_col(k) = ght(i,j,k)
+            END DO
+
+            ! Environment and pressure brackets are shared by all parcel origins.
+            ! Retain the legacy table search bounds and arithmetic order.
+            DO k = 1,mkzh
+                tvenv_col(k) = tmk_col(k)*(EPS + qvp_col(k))/(EPS*(1.D0 + qvp_col(k)))
+                lo = 1
+                hi = 149
+                DO WHILE (hi - lo .GT. 1)
+                    mid = (hi + lo) / 2
+                    IF (prs_col(k) .LE. psadiprs(mid)) THEN
+                        lo = mid
+                    ELSE
+                        hi = mid
+                    END IF
+                END DO
+                ip_col(k) = lo
+                fracip_col(k) = (psadiprs(lo)-prs_col(k)) / (psadiprs(lo)-psadiprs(lo+1))
+            END DO
             cape(i,j,1) = 0.D0
             cin(i,j,1) = 0.D0
              
@@ -400,13 +404,28 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
                 ! Calculate temperature and moisture properties of parcel
                 ! (note, qvppari and tmkpari already calculated above for 2d case.)
              
-                tlcl = TLCLC1/(LOG(tmk_new(kpar,i,j)**TLCLC2/(MAX(1.D-20,qvp_new(kpar,i,j)*prs_new(kpar,i,j)/ &
-                       (EPS + qvp_new(kpar,i,j))))) - TLCLC3) + TLCLC4
+                tlcl = TLCLC1/(LOG(tmk_col(kpar)**TLCLC2/(MAX(1.D-20,qvp_col(kpar)*prs_col(kpar)/ &
+                       (EPS + qvp_col(kpar))))) - TLCLC3) + TLCLC4
              
-                ethpari = tmk_new(kpar,i,j)*(1000.D0/prs_new(kpar,i,j))**(GAMMA*(1.D0 + GAMMAMD*qvp_new(kpar,i,j)))* &
-                          EXP((THTECON1/tlcl - THTECON2)*qvp_new(kpar,i,j)*(1.D0 + THTECON3*qvp_new(kpar,i,j)))
-                
-                zlcl = ght_new(kpar,i,j) + (tmk_new(kpar,i,j) - tlcl)/(G/CP * (1.D0 + CPMD*qvp_new(kpar,i,j)))
+                ethpari = tmk_col(kpar)*(1000.D0/prs_col(kpar))**(GAMMA*(1.D0 + GAMMAMD*qvp_col(kpar)))* &
+                          EXP((THTECON1/tlcl - THTECON2)*qvp_col(kpar)*(1.D0 + THTECON3*qvp_col(kpar)))
+
+                ! Equivalent potential temperature is constant during this ascent.
+                lo = 1
+                hi = 149
+                DO WHILE (hi - lo .GT. 1)
+                    mid = (hi + lo) / 2
+                    IF (ethpari .GE. psadithte(mid)) THEN
+                        lo = mid
+                    ELSE
+                        hi = mid
+                    END IF
+                END DO
+                jt = lo
+                fracjt = (ethpari-psadithte(jt)) / (psadithte(jt+1)-psadithte(jt))
+                dry_lapse = G/(CP * (1.D0 + CPMD*qvp_col(kpar)))
+
+                zlcl = ght_col(kpar) + (tmk_col(kpar) - tlcl)/(G/CP * (1.D0 + CPMD*qvp_col(kpar)))
 
                 ! Calculate buoyancy and relative height of lifted parcel at
                 ! all levels, and store in bottom up arrays.  add a level at the lcl,
@@ -416,7 +435,7 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
                 kk = 0
                 ilcl = 0
 
-                IF (ght_new(kpar,i,j) .GE. zlcl) THEN
+                IF (ght_col(kpar) .GE. zlcl) THEN
                     ! Initial parcel already saturated or supersaturated.
                     ilcl = 2
                     klcl = 1
@@ -428,36 +447,37 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
                     kk = kk + 1
 
                     ! Model level is below lcl
-                    IF (ght_new(k,i,j) .LT. zlcl) THEN
-                        tmklift = tmk_new(kpar,i,j) - G/(CP * (1.D0 + CPMD*qvp_new(kpar,i,j)))*&
-                                  (ght_new(k,i,j) - ght_new(kpar,i,j))
-                        tvenv = tmk_new(k,i,j)*(EPS + qvp_new(k,i,j))/(EPS*(1.D0 + qvp_new(k,i,j)))
-                        tvlift = tmklift*(EPS + qvp_new(kpar,i,j))/(EPS*(1.D0 + qvp_new(kpar,i,j)))
-                        ghtlift = ght_new(k,i,j)
-                    ELSE IF (ght(i,j,k) .GE. zlcl .AND. ilcl .EQ. 0) THEN
+                    IF (ght_col(k) .LT. zlcl) THEN
+                        tmklift = tmk_col(kpar) - dry_lapse*&
+                                  (ght_col(k) - ght_col(kpar))
+                        tvenv = tvenv_col(k)
+                        tvlift = tmklift*(EPS + qvp_col(kpar))/(EPS*(1.D0 + qvp_col(kpar)))
+                        ghtlift = ght_col(k)
+                    ELSE IF (ght_col(k) .GE. zlcl .AND. ilcl .EQ. 0) THEN
                         ! This model level and previous model level straddle the lcl,
                         ! so first create a new level in the bottom-up array, at the lcl.
-                        facden = 1.0/(ght_new(k,i,j) - ght_new(k+1,i,j))
-                        tmkenv = tmk_new(k+1,i,j)*((ght_new(k,i,j)-zlcl)*facden) + tmk_new(k,i,j)*&
-                                 ((zlcl-ght_new(k+1,i,j))*facden)
-                        qvpenv = qvp_new(k+1,i,j)*((ght_new(k,i,j)-zlcl)*facden) + qvp_new(k,i,j)*&
-                                 ((zlcl-ght_new(k+1,i,j))*facden)
+                        facden = 1.0/(ght_col(k) - ght_col(k+1))
+                        tmkenv = tmk_col(k+1)*((ght_col(k)-zlcl)*facden) + tmk_col(k)*&
+                                 ((zlcl-ght_col(k+1))*facden)
+                        qvpenv = qvp_col(k+1)*((ght_col(k)-zlcl)*facden) + qvp_col(k)*&
+                                 ((zlcl-ght_col(k+1))*facden)
                         tvenv = tmkenv* (EPS + qvpenv) / (EPS * (1.D0 + qvpenv))
-                        tvlift = tlcl* (EPS + qvp_new(kpar,i,j)) / (EPS *(1.D0 + qvp_new(kpar,i,j)))
+                        tvlift = tlcl* (EPS + qvp_col(kpar)) / (EPS *(1.D0 + qvp_col(kpar)))
                         ghtlift = zlcl
                         ilcl = 1
                     ELSE
-                        tmklift = TONPSADIABAT(ethpari, prs_new(k,i,j), psadithte, psadiprs,&
-                                             psaditmk, GAMMA, errstat, errmsg)
+                        tmklift = TONPSADIABAT_CACHED(ethpari, prs_col(k), psadiprs,&
+                                             psaditmk, GAMMA, ip_col(k), jt, fracip_col(k), fracjt, &
+                                             errstat, errmsg)
                         eslift = EZERO*EXP(ESLCON1*(tmklift - CELKEL)/(tmklift - ESLCON2))
-                        qvplift = EPS*eslift/(prs_new(k,i,j) - eslift)
-                        tvenv = tmk_new(k,i,j) * (EPS + qvp_new(k,i,j)) / (EPS * (1.D0 + qvp_new(k,i,j)))
+                        qvplift = EPS*eslift/(prs_col(k) - eslift)
+                        tvenv = tvenv_col(k)
                         tvlift = tmklift*(EPS + qvplift) / (EPS * (1.D0 + qvplift))
-                        ghtlift = ght_new(k,i,j)
+                        ghtlift = ght_col(k)
                     END IF
                     ! Buoyancy
                     buoy(kk) = G*(tvlift - tvenv)/tvenv
-                    zrel(kk) = ghtlift - ght_new(kpar,i,j)
+                    zrel(kk) = ghtlift - ght_col(kpar)
                     IF ((kk .GT. 1) .AND. (buoy(kk)*buoy(kk-1) .LT. 0.0D0)) THEN
                         ! Parcel ascent curve crosses sounding curve, so create a new level
                         ! in the bottom-up array at the crossing.
@@ -577,6 +597,66 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
 
     RETURN
 END SUBROUTINE DCAPECALC3D
+
+REAL(KIND=8) FUNCTION TONPSADIABAT_CACHED(thte, prs, psadiprs, psaditmk, gamma, ip, jt, fracip, fracjt,&
+                                   errstat, errmsg)
+    USE wrf_constants, ONLY : ALGERR
+    !f2py threadsafe
+
+    IMPLICIT NONE
+    REAL(KIND=8), INTENT(IN) :: thte
+    REAL(KIND=8), INTENT(IN) :: prs
+    REAL(KIND=8), DIMENSION(150), INTENT(IN) :: psadiprs
+    REAL(KIND=8), DIMENSION(150,150), INTENT(IN) :: psaditmk
+    REAL(KIND=8), INTENT(IN) :: gamma
+    INTEGER, INTENT(INOUT) :: errstat
+    CHARACTER(LEN=*), INTENT(INOUT) :: errmsg
+
+! NCLEND
+
+    REAL(KIND=8), INTENT(IN) :: fracjt, fracip
+    REAL(KIND=8) :: fracjt2
+    REAL(KIND=8) :: fracip2
+
+    INTEGER, INTENT(IN) :: ip, jt
+
+    !   DCAPECALC3D supplies cached lookup brackets and interpolation fractions.
+    !   This function gives the temperature (in K) on a moist adiabat
+    !   (specified by thte in K) given pressure in hPa.  It uses a
+    !   lookup table, with data that was generated by the Bolton (1980)
+    !   formula for theta_e.
+
+    !     First check if pressure is less than min pressure in lookup table.
+    !     If it is, assume parcel is so dry that the given theta-e value can
+    !     be interpretted as theta, and get temperature from the simple dry
+    !     theta formula.
+
+    IF (prs .LE. psadiprs(150)) THEN
+        TONPSADIABAT_CACHED = thte * (prs/1000.D0)**gamma
+        RETURN
+    END IF
+
+    !   Otherwise, look for the given thte/prs point in the lookup table.
+
+    fracjt2 = 1.D0 - fracjt
+    fracip2 = 1.D0 - fracip
+
+    IF (psaditmk(ip,jt) .GT. 1D9 .OR. psaditmk(ip+1,jt) .GT. 1D9 .OR. &
+        psaditmk(ip,jt+1) .GT. 1D9 .OR. psaditmk(ip+1,jt+1) .GT. 1D9) THEN
+        ! Set the error and return
+        TONPSADIABAT_CACHED = -1
+        errstat = ALGERR
+        WRITE(errmsg, *) "capecalc3d: Tried to access missing temperature in lookup table. ", &
+                 "Prs and Thte probably unreasonable. prs,thte=", prs, thte
+        RETURN
+    END IF
+
+    TONPSADIABAT_CACHED = fracip2*fracjt2*psaditmk(ip,jt) + fracip*fracjt2*psaditmk(ip+1,jt) + &
+            fracip2*fracjt*psaditmk(ip,jt+1) + fracip*fracjt*psaditmk(ip+1,jt+1)
+
+    RETURN
+
+END FUNCTION TONPSADIABAT_CACHED
 
 !======================================================================
 !

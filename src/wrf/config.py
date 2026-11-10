@@ -1,6 +1,7 @@
 from __future__ import (absolute_import, division, print_function)
 
 from threading import local
+import os
 import wrapt
 
 from ._wrffortran import (fomp_enabled, fomp_set_num_threads,
@@ -231,9 +232,11 @@ def omp_enabled():
     return True if fomp_enabled() else False
 
 
-# Set OpenMP to use 1 thread, static scheduler, and no dynamic
+# Keep the conservative one-thread default unless the caller configured OpenMP.
+# The runtime reads OMP_NUM_THREADS itself, including nested thread-count lists.
 # Note: Using the raw extension functions here to prevent possible
 # circular import problems in the future.
-fomp_set_num_threads(1)
+if not os.environ.get("OMP_NUM_THREADS"):
+    fomp_set_num_threads(1)
 fomp_set_schedule(omp_constants.fomp_sched_static, 0)
 fomp_set_dynamic(False)

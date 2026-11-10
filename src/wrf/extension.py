@@ -639,38 +639,24 @@ def _cape(p_hpa, tk, qv, ht, ter, sfp, missing, i3dflag, ter_follow,
     errstat = np.array(0)
     errmsg = np.zeros(Constants.ERRLEN, "c")
 
+    # p_hpa, tk, qv, and ht have the vertical flipped by the decorators.
     if i3dflag:
-        cape_routine = dcapecalc3d
+        # The 3D kernel now owns only small, thread-private column workspaces.
+        result = dcapecalc3d(p_hpa, tk, qv, ht, ter, sfp,
+                            capeview, cinview, missing, ter_follow,
+                            psafile, errstat, errmsg)
     else:
-        cape_routine = dcapecalc2d
-
-    # Work arrays
-    k_left_shape = (p_hpa.shape[2], p_hpa.shape[0], p_hpa.shape[1])
-    prsf = np.empty(k_left_shape, np.float64, order="F")
-    prs_new = np.empty(k_left_shape, np.float64, order="F")
-    tmk_new = np.empty(k_left_shape, np.float64, order="F")
-    qvp_new = np.empty(k_left_shape, np.float64, order="F")
-    ght_new = np.empty(k_left_shape, np.float64, order="F")
-
-    # note that p_hpa, tk, qv, and ht have the vertical flipped
-    result = cape_routine(p_hpa,
-                          tk,
-                          qv,
-                          ht,
-                          ter,
-                          sfp,
-                          capeview,
-                          cinview,
-                          prsf,
-                          prs_new,
-                          tmk_new,
-                          qvp_new,
-                          ght_new,
-                          missing,
-                          ter_follow,
-                          psafile,
-                          errstat,
-                          errmsg)
+        # The 2D mixed-parcel algorithm still needs its original work arrays.
+        k_left_shape = (p_hpa.shape[2], p_hpa.shape[0], p_hpa.shape[1])
+        prsf = np.empty(k_left_shape, np.float64, order="F")
+        prs_new = np.empty(k_left_shape, np.float64, order="F")
+        tmk_new = np.empty(k_left_shape, np.float64, order="F")
+        qvp_new = np.empty(k_left_shape, np.float64, order="F")
+        ght_new = np.empty(k_left_shape, np.float64, order="F")
+        result = dcapecalc2d(p_hpa, tk, qv, ht, ter, sfp,
+                            capeview, cinview, prsf, prs_new, tmk_new,
+                            qvp_new, ght_new, missing, ter_follow,
+                            psafile, errstat, errmsg)
 
     if int(errstat) != 0:
         raise DiagnosticError("".join(npbytes_to_str(errmsg)).strip())
