@@ -11,6 +11,12 @@ import datetime as dt
 from inspect import getmodule
 
 try:
+    from netCDF4 import Dataset as _NetCDF4Dataset
+except ImportError:
+    # Array-only diagnostics do not require netCDF4.
+    _NetCDF4Dataset = ()
+
+try:
     from inspect import signature
 except ImportError:
     from inspect import getargspec
@@ -134,7 +140,9 @@ def is_multi_file(wrfin):
         is a single NetCDF file object.
 
     """
-    return (isinstance(wrfin, Iterable) and not isstr(wrfin))
+    # Recent netCDF4 exposes __iter__, but a Dataset is still one input file.
+    return (not isinstance(wrfin, _NetCDF4Dataset)
+            and isinstance(wrfin, Iterable) and not isstr(wrfin))
 
 
 def has_time_coord(wrfnc):

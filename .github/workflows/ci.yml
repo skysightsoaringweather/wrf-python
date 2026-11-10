@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - develop
+      - optim
   pull_request:
   workflow_dispatch:
   schedule:
@@ -43,6 +44,10 @@ jobs:
         run: |
           cd test/ci_tests
           python utests.py
+      - name: CAPE and OpenMP regression tests
+        run: |
+          python -m unittest discover -s test -p test_cape.py
+          python -m unittest discover -s test -p test_omp_config.py
       - name: check import
         if: failure()
         run: |
