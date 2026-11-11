@@ -271,9 +271,46 @@ END SUBROUTINE DPFCALC
 ! Also also, Pressure must be hPa
 
 ! NCLFORTSTART
-SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
+SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin, &
+                      cmsg,mix,mjy,mkzh,ter_follow,psafile,errstat,errmsg)
+    IMPLICIT NONE
+    !f2py threadsafe
+    !f2py intent(in,out) :: cape, cin
+    INTEGER, INTENT(IN) :: mix,mjy,mkzh,ter_follow
+    REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(IN) :: prs,tmk,qvp,ght
+    REAL(KIND=8), DIMENSION(mix,mjy), INTENT(IN) :: ter,sfp
+    REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(OUT) :: cape,cin
+    REAL(KIND=8), INTENT(IN) :: cmsg
+    CHARACTER(LEN=*), INTENT(IN) :: psafile
+    INTEGER, INTENT(INOUT) :: errstat
+    CHARACTER(LEN=*), INTENT(INOUT) :: errmsg
+    CALL DCAPECALC3D_CORE(prs,tmk,qvp,ght,ter,sfp,cape,cin,cmsg, &
+                         mix,mjy,mkzh,ter_follow,psafile,errstat,errmsg,mkzh,0)
+END SUBROUTINE DCAPECALC3D
+
+! Same all-parcel algorithm, with only one output level and no CIN volume.
+! Terrain/surface pressure are unused by the 3D algorithm (unlike CAPE 2D).
+SUBROUTINE DCAPEMAX3D(prs,tmk,qvp,ght,cape,cmsg,mix,mjy,mkzh,psafile,errstat,errmsg)
+    IMPLICIT NONE
+    !f2py threadsafe
+    !f2py intent(in,out) :: cape
+    INTEGER, INTENT(IN) :: mix,mjy,mkzh
+    REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(IN) :: prs,tmk,qvp,ght
+    REAL(KIND=8), DIMENSION(mix,mjy,1), INTENT(OUT) :: cape
+    REAL(KIND=8), DIMENSION(mix,mjy,1) :: unused_cin
+    REAL(KIND=8), DIMENSION(mix,mjy) :: unused_surface
+    REAL(KIND=8), INTENT(IN) :: cmsg
+    CHARACTER(LEN=*), INTENT(IN) :: psafile
+    INTEGER, INTENT(INOUT) :: errstat
+    CHARACTER(LEN=*), INTENT(INOUT) :: errmsg
+    unused_surface = 0.D0
+    CALL DCAPECALC3D_CORE(prs,tmk,qvp,ght,unused_surface,unused_surface,cape,unused_cin, &
+                         cmsg,mix,mjy,mkzh,1,psafile,errstat,errmsg,1,1)
+END SUBROUTINE DCAPEMAX3D
+
+SUBROUTINE DCAPECALC3D_CORE(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
             cmsg,mix,mjy,mkzh,ter_follow,&
-            psafile, errstat, errmsg)
+            psafile, errstat, errmsg, nout, maximum_only)
     USE wrf_constants, ONLY : CELKEL, G, EZERO, ESLCON1, ESLCON2, &
                           EPS, RD, CP, GAMMA, CPMD, RGASMD, GAMMAMD, TLCLC1, &
                           TLCLC2, TLCLC3, TLCLC4, THTECON1, THTECON2, THTECON3
@@ -284,15 +321,15 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
     !f2py threadsafe
     !f2py intent(in,out) :: cape, cin
 
-    INTEGER, INTENT(IN) :: mix, mjy, mkzh, ter_follow
+    INTEGER, INTENT(IN) :: mix, mjy, mkzh, ter_follow, nout, maximum_only
     REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(IN) :: prs
     REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(IN) :: tmk
     REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(IN) :: qvp
     REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(IN) :: ght
     REAL(KIND=8), DIMENSION(mix,mjy), INTENT(IN) :: ter
     REAL(KIND=8), DIMENSION(mix,mjy), INTENT(IN) ::sfp
-    REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(OUT) :: cape
-    REAL(KIND=8), DIMENSION(mix,mjy,mkzh), INTENT(OUT) :: cin
+    REAL(KIND=8), DIMENSION(mix,mjy,nout), INTENT(OUT) :: cape
+    REAL(KIND=8), DIMENSION(mix,mjy,nout), INTENT(OUT) :: cin
 
     REAL(KIND=8), INTENT(IN) :: cmsg
     CHARACTER(LEN=*), INTENT(IN) :: psafile
@@ -549,8 +586,10 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
 
                 IF (.NOT. elfound) THEN
                     !print *,'el not found'
-                    cape(i,j,kpar) = cmsg
-                    cin(i,j,kpar)  = cmsg
+                    IF (maximum_only .EQ. 0) THEN
+                        cape(i,j,kpar) = cmsg
+                        cin(i,j,kpar) = cmsg
+                    END IF
                     klfc = kmax
                     CYCLE
                 END IF
@@ -576,8 +615,15 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
 
                 ! Now we can assign values to cape and cin
 
-                cape(i,j,kpar) = MAX(benaccum(kel)-benamin, 0.1D0)
-                cin(i,j,kpar) = MAX(-benamin, 0.1D0)
+                IF (maximum_only .NE. 0) THEN
+                    ! The top parcel is the valid legacy zero. Missing parcels
+                    ! are skipped above. Float rounding is monotone, so casting
+                    ! this maximum equals reducing the cast parcel results.
+                    cape(i,j,1) = MAX(cape(i,j,1), MAX(benaccum(kel)-benamin, 0.1D0))
+                ELSE
+                    cape(i,j,kpar) = MAX(benaccum(kel)-benamin, 0.1D0)
+                    cin(i,j,kpar) = MAX(-benamin, 0.1D0)
+                END IF
 
                 ! cin is uninteresting when cape is small (< 100 j/kg), so set
                 ! cin to -0.1 (see note about missing values in v6.1.0) in
@@ -588,7 +634,9 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
                 ! to a more appropriate missing value, which is passed into this
                 ! routine as cmsg.
 
-                IF (cape(i,j,kpar) .LT. 100.D0) cin(i,j,kpar) = cmsg
+                IF (maximum_only .EQ. 0) THEN
+                    IF (cape(i,j,kpar) .LT. 100.D0) cin(i,j,kpar) = cmsg
+                END IF
 
             END DO
         END DO
@@ -596,7 +644,7 @@ SUBROUTINE DCAPECALC3D(prs,tmk,qvp,ght,ter,sfp,cape,cin,&
     !$OMP END PARALLEL DO
 
     RETURN
-END SUBROUTINE DCAPECALC3D
+END SUBROUTINE DCAPECALC3D_CORE
 
 REAL(KIND=8) FUNCTION TONPSADIABAT_CACHED(thte, prs, psadiprs, psaditmk, gamma, ip, jt, fracip, fracjt,&
                                    errstat, errmsg)

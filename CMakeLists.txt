@@ -126,6 +126,7 @@ set(python_src_files
     "${CMAKE_SOURCE_DIR}/src/wrf/api.py"
     "${CMAKE_SOURCE_DIR}/src/wrf/cache.py"
     "${CMAKE_SOURCE_DIR}/src/wrf/computation.py"
+    "${CMAKE_SOURCE_DIR}/src/wrf/memory.py"
     "${CMAKE_SOURCE_DIR}/src/wrf/config.py"
     "${CMAKE_SOURCE_DIR}/src/wrf/constants.py"
     "${CMAKE_SOURCE_DIR}/src/wrf/contrib.py"

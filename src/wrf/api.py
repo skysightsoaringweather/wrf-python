@@ -110,3 +110,6 @@ __all__ += ["CoordPair"]
 __all__ += ["to_xy_coords"]
 __all__ += ["cache_item", "get_cached_item"]
 __all__ += ["__version__"]
+
+from .memory import cape_3d_max, interplevel_uvw
+__all__ += ["cape_3d_max", "interplevel_uvw"]
