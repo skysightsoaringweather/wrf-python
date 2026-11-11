@@ -1026,3 +1026,41 @@ END SUBROUTINE DCOMPUTEICLW
 
 
 
+
+
+! Interpolate three collocated wind components with one bracket search.
+! ip/im are selected from the full grid before the Python wrapper blocks it.
+SUBROUTINE DINTERP3DZ_UVW(u,v,w,zdata,levels,uo,vo,wo,nx,ny,nz,nlev,missingval,ip,im)
+    IMPLICIT NONE
+    !f2py threadsafe
+    !f2py intent(in,out) :: uo,vo,wo
+    INTEGER, INTENT(IN) :: nx,ny,nz,nlev,ip,im
+    REAL(KIND=8), DIMENSION(nx,ny,nz), INTENT(IN) :: u,v,w,zdata
+    REAL(KIND=8), DIMENSION(nlev), INTENT(IN) :: levels
+    REAL(KIND=8), DIMENSION(nx,ny,nlev), INTENT(OUT) :: uo,vo,wo
+    REAL(KIND=8), INTENT(IN) :: missingval
+    INTEGER :: i,j,lev,kp
+    REAL(KIND=8) :: w1,w2,desiredloc
+    !$OMP PARALLEL DO COLLAPSE(3) PRIVATE(i,j,lev,kp,w1,w2,desiredloc) SCHEDULE(runtime)
+    DO lev=1,nlev
+        DO i=1,nx
+            DO j=1,ny
+                uo(i,j,lev)=missingval
+                vo(i,j,lev)=missingval
+                wo(i,j,lev)=missingval
+                desiredloc=levels(lev)
+                DO kp=nz,2,-1
+                    IF (zdata(i,j,kp-im) < desiredloc .AND. zdata(i,j,kp-ip) > desiredloc) THEN
+                        w2=(desiredloc-zdata(i,j,kp-im))/(zdata(i,j,kp-ip)-zdata(i,j,kp-im))
+                        w1=1.D0-w2
+                        uo(i,j,lev)=w1*u(i,j,kp-im)+w2*u(i,j,kp-ip)
+                        vo(i,j,lev)=w1*v(i,j,kp-im)+w2*v(i,j,kp-ip)
+                        wo(i,j,lev)=w1*w(i,j,kp-im)+w2*w(i,j,kp-ip)
+                        EXIT
+                    END IF
+                END DO
+            END DO
+        END DO
+    END DO
+    !$OMP END PARALLEL DO
+END SUBROUTINE DINTERP3DZ_UVW
